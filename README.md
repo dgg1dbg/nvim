@@ -1,0 +1,2 @@
+- This is vim config file i am using personal
+- All thanks to [Josean Martinez](https://www.youtube.com/watch?v=6pAG3BHurdM&t=968s&ab_channel=JoseanMartinez) for the vim tutorial

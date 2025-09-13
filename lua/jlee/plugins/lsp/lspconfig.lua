@@ -1,195 +1,119 @@
 return {
-  "neovim/nvim-lspconfig",
-  event = { "BufReadPre", "BufNewFile" },
-  dependencies = {
-    "hrsh7th/cmp-nvim-lsp",
-    { "antosha417/nvim-lsp-file-operations", config = true },
-    { "folke/neodev.nvim", opts = {} },
-  },
-  config = function()
-    -- import lspconfig plugin
-    local lspconfig = require("lspconfig")
+	"neovim/nvim-lspconfig",
+	event = { "BufReadPre", "BufNewFile" },
+	dependencies = {
+		"hrsh7th/cmp-nvim-lsp",
+		{ "antosha417/nvim-lsp-file-operations", config = true },
+		{ "folke/neodev.nvim", opts = {} },
+		"williamboman/mason-lspconfig.nvim",
+	},
+	config = function()
+		local lspconfig = require("lspconfig")
+		local cmp_nvim_lsp = require("cmp_nvim_lsp")
+		local keymap = vim.keymap
 
-    -- import mason_lspconfig plugin
-    local mason_lspconfig = require("mason-lspconfig")
+		-- Keymaps for LSP
+		vim.api.nvim_create_autocmd("LspAttach", {
+			group = vim.api.nvim_create_augroup("UserLspConfig", {}),
+			callback = function(ev)
+				local opts = { buffer = ev.buf, silent = true }
 
-    -- import cmp-nvim-lsp plugin
-    local cmp_nvim_lsp = require("cmp_nvim_lsp")
+				keymap.set("n", "gR", "<cmd>Telescope lsp_references<CR>", { desc = "LSP references", buffer = ev.buf })
+				keymap.set("n", "gD", vim.lsp.buf.declaration, { desc = "Go to declaration", buffer = ev.buf })
+				keymap.set(
+					"n",
+					"gd",
+					"<cmd>Telescope lsp_definitions<CR>",
+					{ desc = "Go to definition", buffer = ev.buf }
+				)
+				keymap.set(
+					"n",
+					"gi",
+					"<cmd>Telescope lsp_implementations<CR>",
+					{ desc = "Go to implementation", buffer = ev.buf }
+				)
+				keymap.set("n", "K", vim.lsp.buf.hover, { desc = "Hover documentation", buffer = ev.buf })
+				keymap.set(
+					{ "n", "v" },
+					"<leader>ca",
+					vim.lsp.buf.code_action,
+					{ desc = "Code action", buffer = ev.buf }
+				)
+				keymap.set("n", "<leader>rn", vim.lsp.buf.rename, { desc = "Rename symbol", buffer = ev.buf })
+				keymap.set("n", "<leader>d", vim.diagnostic.open_float, { desc = "Line diagnostics", buffer = ev.buf })
+				keymap.set(
+					"n",
+					"<leader>D",
+					"<cmd>Telescope diagnostics bufnr=0<CR>",
+					{ desc = "Buffer diagnostics", buffer = ev.buf }
+				)
+				keymap.set("n", "[d", vim.diagnostic.goto_prev, { desc = "Prev diagnostic", buffer = ev.buf })
+				keymap.set("n", "]d", vim.diagnostic.goto_next, { desc = "Next diagnostic", buffer = ev.buf })
+				keymap.set("n", "<leader>rs", ":LspRestart<CR>", { desc = "Restart LSP", buffer = ev.buf })
 
-    local keymap = vim.keymap -- for conciseness
+				-- Safe inlay hint enabling
+				local client = vim.lsp.get_client_by_id(ev.data.client_id)
+				if client and client.server_capabilities.inlayHintProvider then
+					if vim.lsp.inlay_hint and type(vim.lsp.inlay_hint) == "function" then
+						vim.lsp.inlay_hint(ev.buf, true)
+					end
+				end
+			end,
+		})
 
-    vim.api.nvim_create_autocmd("LspAttach", {
-      group = vim.api.nvim_create_augroup("UserLspConfig", {}),
-      callback = function(ev)
-        -- Buffer local mappings.
-        -- See `:help vim.lsp.*` for documentation on any of the below functions
-        local opts = { buffer = ev.buf, silent = true }
+		-- LSP capabilities for nvim-cmp
+		local capabilities = cmp_nvim_lsp.default_capabilities()
 
-        -- set keybinds
-        opts.desc = "Show LSP references"
-        keymap.set("n", "gR", "<cmd>Telescope lsp_references<CR>", opts) -- show definition, references
+		-- Configure diagnostic display
+		vim.diagnostic.config({
+			virtual_text = true,
+			signs = true,
+			underline = true,
+			update_in_insert = false,
+			severity_sort = true,
+		})
 
-        opts.desc = "Go to declaration"
-        keymap.set("n", "gD", vim.lsp.buf.declaration, opts) -- go to declaration
+		-- Optionally change gutter signs
+		local signs = { Error = "", Warn = "", Hint = "󰠠", Info = "" }
+		for type, icon in pairs(signs) do
+			vim.fn.sign_define("DiagnosticSign" .. type, { text = icon, texthl = "DiagnosticSign" .. type })
+		end
 
-        opts.desc = "Show LSP definitions"
-        keymap.set("n", "gd", "<cmd>Telescope lsp_definitions<CR>", opts) -- show lsp definitions
+		-- Setup LSP servers installed by Mason
+		local servers = {
+			"lua_ls",
+			"clangd",
+			"pyright",
+			"jdtls",
+			"kotlin_language_server",
+			"gopls",
+		}
 
-        opts.desc = "Show LSP implementations"
-        keymap.set("n", "gi", "<cmd>Telescope lsp_implementations<CR>", opts) -- show lsp implementations
+		for _, server in ipairs(servers) do
+			local opts = { capabilities = capabilities }
 
-        opts.desc = "Show LSP type definitions"
-        keymap.set("n", "gt", "<cmd>Telescope lsp_type_definitions<CR>", opts) -- show lsp type definitions
+			if server == "clangd" then
+				opts.cmd = {
+					"clangd",
+					"--background-index",
+					"--clang-tidy",
+					"--header-insertion=iwyu",
+					"--completion-style=detailed",
+					"--function-arg-placeholders",
+				}
+			elseif server == "pyright" then
+				opts.settings = {
+					python = {
+						analysis = {
+							autoSearchPaths = true,
+							diagnosticMode = "workspace",
+							useLibraryCodeForTypes = true,
+						},
+					},
+				}
+			end
 
-        opts.desc = "See available code actions"
-        keymap.set({ "n", "v" }, "<leader>ca", vim.lsp.buf.code_action, opts) -- see available code actions, in visual mode will apply to selection
-
-        opts.desc = "Smart rename"
-        keymap.set("n", "<leader>rn", vim.lsp.buf.rename, opts) -- smart rename
-
-        opts.desc = "Show buffer diagnostics"
-        keymap.set("n", "<leader>D", "<cmd>Telescope diagnostics bufnr=0<CR>", opts) -- show  diagnostics for file
-
-        opts.desc = "Show line diagnostics"
-        keymap.set("n", "<leader>d", vim.diagnostic.open_float, opts) -- show diagnostics for line
-
-        opts.desc = "Go to previous diagnostic"
-        keymap.set("n", "[d", vim.diagnostic.goto_prev, opts) -- jump to previous diagnostic in buffer
-
-        opts.desc = "Go to next diagnostic"
-        keymap.set("n", "]d", vim.diagnostic.goto_next, opts) -- jump to next diagnostic in buffer
-
-        opts.desc = "Show documentation for what is under cursor"
-        keymap.set("n", "K", vim.lsp.buf.hover, opts) -- show documentation for what is under cursor
-
-        opts.desc = "Restart LSP"
-        keymap.set("n", "<leader>rs", ":LspRestart<CR>", opts) -- mapping to restart lsp if necessary
-        
-        -- Enable inlay hints if supported
-        if vim.lsp.inlay_hint and client.server_capabilities.inlayHintProvider then
-          vim.lsp.inlay_hint.enable(ev.buf, true)
-        end
-      end,
-    })
-
-    -- used to enable autocompletion (assign to every lsp server config)
-    local capabilities = cmp_nvim_lsp.default_capabilities()
-
-    -- Change the Diagnostic symbols in the sign column (gutter)
-    local signs = { Error = " ", Warn = " ", Hint = "󰠠 ", Info = " " }
-    for type, icon in pairs(signs) do
-      local hl = "DiagnosticSign" .. type
-      vim.fn.sign_define(hl, { text = icon, texthl = hl, numhl = "" })
-    end
-
-    -- Configure mason to install these LSP servers
-    mason_lspconfig.setup({
-      -- list of servers for mason to install
-      ensure_installed = {
-        "html",
-        "cssls",
-        "tailwindcss",
-        "lua_ls",
-        "clangd",
-        "ast_grep",
-        "markdown_oxide",
-        "pyright",
-        "bashls",
-        "kotlin_language_server",
-      },
-    })
-
-    -- Configure diagnostic display
-    vim.diagnostic.config({
-      virtual_text = true,
-      signs = true,
-      underline = true,
-      update_in_insert = false,
-      severity_sort = true,
-    })
-
-    mason_lspconfig.setup_handlers({
-      -- default handler for installed servers
-      function(server_name)
-        lspconfig[server_name].setup({
-          capabilities = capabilities,
-        })
-      end,
-      
-      ["html"] = function()
-        lspconfig["html"].setup({
-          capabilities = capabilities,
-        })
-      end,
-      
-      ["cssls"] = function()
-        lspconfig["cssls"].setup({
-          capabilities = capabilities,
-        })
-      end,
-      
-      ["tailwindcss"] = function()
-        lspconfig["tailwindcss"].setup({
-          capabilities = capabilities,
-          filetypes = { "html", "css", "scss", "javascript", "javascriptreact", "typescript", "typescriptreact", "vue" },
-        })
-      end,
-      
-      ["clangd"] = function()
-        lspconfig["clangd"].setup({
-          capabilities = capabilities,
-          cmd = {
-            "clangd",
-            "--background-index",
-            "--clang-tidy",
-            "--header-insertion=iwyu",
-            "--completion-style=detailed",
-            "--function-arg-placeholders",
-          },
-        })
-      end,
-      
-      ["ast_grep"] = function()
-        lspconfig["ast_grep"].setup({
-          capabilities = capabilities,
-        })
-      end,
-      
-      ["markdown_oxide"] = function()
-        lspconfig["markdown_oxide"].setup({
-          capabilities = capabilities,
-          filetypes = { "markdown", "md" },
-        })
-      end,
-      
-      ["pyright"] = function()
-        lspconfig["pyright"].setup({
-          capabilities = capabilities,
-          settings = {
-            python = {
-              analysis = {
-                autoSearchPaths = true,
-                diagnosticMode = "workspace",
-                useLibraryCodeForTypes = true,
-              },
-            },
-          },
-        })
-      end,
-      
-      ["bashls"] = function()
-        lspconfig["bashls"].setup({
-          capabilities = capabilities,
-          filetypes = { "sh", "bash" },
-        })
-      end,
-      
-      ["kotlin_language_server"] = function()  -- Configure Kotlin LSP
-        lspconfig["kotlin_language_server"].setup({
-          capabilities = capabilities,
-        })
-      end,
-      
-    })
-  end,
+			lspconfig[server].setup(opts)
+		end
+	end,
 }

@@ -18,7 +18,13 @@ return {
 			callback = function(ev)
 				local opts = { buffer = ev.buf, silent = true }
 
-				keymap.set("n", "gR", "<cmd>Telescope lsp_references<CR>", { desc = "LSP references", buffer = ev.buf })
+				vim.api.nvim_buf_set_keymap(
+					ev.buf,
+					"n",
+					"gR",
+					"<cmd>Telescope lsp_references<CR>",
+					{ noremap = true, silent = true }
+				)
 				keymap.set("n", "gD", vim.lsp.buf.declaration, { desc = "Go to declaration", buffer = ev.buf })
 				keymap.set(
 					"n",

@@ -42,3 +42,33 @@ opt.splitbelow = true -- split horizontal window to the bottom
 
 -- turn off swapfile
 opt.swapfile = false
+
+opt.conceallevel = 1
+vim.api.nvim_create_autocmd("FileType", {
+	pattern = "markdown",
+	callback = function()
+		vim.keymap.set("i", "<CR>", function()
+			local line = vim.api.nvim_get_current_line()
+
+			-- Stop list if line is just a marker with no text (like "- " or "1. ")
+			if line:match("^%s*[-*+]%s*$") or line:match("^%s*%d+%.%s*$") then
+				return "<C-u><CR>" -- clear line, then newline
+			end
+
+			-- Continue bullet lists (-, *, +)
+			local indent, bullet = line:match("^(%s*)([-*+])%s+")
+			if bullet then
+				return "<CR>" .. indent .. bullet .. " "
+			end
+
+			-- Continue numbered lists (1., 2., ...)
+			local nindent, num = line:match("^(%s*)(%d+)%.%s+")
+			if num then
+				return "<CR>" .. nindent .. tostring(tonumber(num) + 1) .. ". "
+			end
+
+			-- Normal newline otherwise
+			return "<CR>"
+		end, { buffer = true, expr = true })
+	end,
+})
